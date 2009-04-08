@@ -16,7 +16,7 @@ module Diakonos
     def fetch_conf( location = "v#{VERSION}" )
       require 'open-uri'
       found = false
-      puts "Fetching configuration from #{location}..."
+      interaction_blink("Fetching configuration from #{location}...")
 
       begin
         open( "http://github.com/Pistos/diakonos/tree/#{location}/diakonos.conf?raw=true" ) do |http|
@@ -29,7 +29,7 @@ module Diakonos
           end
         end
       rescue SocketError, OpenURI::HTTPError => e
-        $stderr.puts "Failed to fetch from #{location}."
+        interaction_blink("Failed to fetch from #{location}.")
       end
 
       found
@@ -41,44 +41,6 @@ module Diakonos
       conf_dir = INSTALL_SETTINGS[ :conf_dir ]
       @global_diakonos_conf = "#{conf_dir}/diakonos.conf"
       @diakonos_conf = @config_filename || "#{@diakonos_home}/diakonos.conf"
-
-      if ! FileTest.exists?( @diakonos_conf )
-        if FileTest.exists?( @global_diakonos_conf )
-          puts "No personal configuration file found."
-          puts "Would you like to copy the system-wide configuration file (#{@global_diakonos_conf}) to use"
-          $stdout.print "as a basis for your personal configuration (recommended)? (y/n)"; $stdout.flush
-          answer = $stdin.gets
-          if answer =~ /^y/i
-            require 'fileutils'
-            FileUtils.cp @global_diakonos_conf, @diakonos_conf
-          end
-        else
-          if @testing
-            File.open( @diakonos_conf, 'w' ) do |f|
-              f.puts File.read( './diakonos.conf' )
-            end
-          else
-            puts "diakonos.conf not found in any of:"
-            puts "  #{conf_dir}"
-            puts "  #{@diakonos_home}"
-            puts "At least one configuration file must exist."
-            $stdout.print "Would you like to download one right now from the Diakonos repository? (y/n)"; $stdout.flush
-            answer = $stdin.gets
-
-            case answer
-            when /^y/i
-              if not fetch_conf
-                fetch_conf 'master'
-              end
-            end
-          end
-
-          if not FileTest.exists?( @diakonos_conf )
-            puts "Terminating due to lack of configuration file."
-            exit 1
-          end
-        end
-      end
 
       @logfilename         = @diakonos_home + "/diakonos.log"
       @keychains           = Hash.new
@@ -123,6 +85,38 @@ module Diakonos
       rescue Errno::ENOENT
         # No config file found or readable
       end
+    end
+
+    def open_configuration
+      if ! FileTest.exists? @diakonos_conf
+        if FileTest.exists? @global_diakonos_conf
+          choice = get_choice(
+            "No personal configuration file found; would you like to copy " +
+            "the system-wide configuration file (#{@global_diakonos_conf}) to use "+
+            "as a basis for your personal configuration (recommended)?",
+            [ CHOICE_YES, CHOICE_NO ],
+            CHOICE_YES
+          )
+          if choice == CHOICE_YES
+            require 'fileutils'
+            FileUtils.cp @global_diakonos_conf, @diakonos_conf
+          end
+        else
+          choice = get_choice(
+            "diakonos.conf not found in #{conf_dir} or #{@diakonos_home}; " +
+            "at least one configuration file must exist. Would you like to " +
+            "download one right now from the Diakonos repository?",
+            [CHOICE_YES, CHOICE_NO],
+            CHOICE_YES
+          )
+          if choice == CHOICE_YES
+            if not fetch_conf
+              fetch_conf 'master'
+            end
+          end
+        end
+      end
+      openFile(@diakonos_conf)
     end
 
     def parse_configuration_file( filename )
